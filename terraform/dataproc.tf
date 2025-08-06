@@ -165,6 +165,35 @@ output "spark_submit_example" {
   EOT
 }
 
+resource "null_resource" "submit_pyspark_job" {
+  provisioner "local-exec" {
+    command = <<EOT
+      # Wait for all resources to be ready
+      echo "Waiting for resources to be ready..."
+      sleep 60
+      
+      # Get the IPs
+      KAFKA_IP="${google_compute_instance.kafka.network_interface.0.network_ip}"
+      POSTGRES_IP="${google_sql_database_instance.postgres.public_ip_address}"
+      
+      # Submit the job with properly escaped properties
+      gcloud dataproc jobs submit pyspark gs://script-bucket-logflow/stream-job.py \
+        --cluster=spark-streaming-cluster \
+        --region=${var.region} \
+        --properties='spark.jars.packages=org.apache.spark:spark-sql-kafka-0-10_2.12:3.3.0,org.postgresql:postgresql:42.5.1' \
+        -- \
+        "$${KAFKA_IP}:9092" \
+        "$${POSTGRES_IP}"
+    EOT
+  }
+  
+  depends_on = [
+    google_dataproc_cluster.spark_cluster,
+    google_sql_database_instance.postgres,
+    google_sql_database.logs_db,
+    google_sql_user.postgres_user
+  ]
+}
 
 
 
